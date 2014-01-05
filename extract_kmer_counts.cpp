@@ -166,11 +166,11 @@ calc_prob_word(string &word, const stats_background &b) {
 }
 
 static void
-extract_kmer_counts(const int k_value, const vector<string> &input_filenames,
-      unordered_map<size_t, size_t> &kmer_counts,
-      stats_collector &sc,
-      size_t &read_length,
-      vector<double> &frequency) {
+extract_kmer_counts_from_fastq(const int k_value,
+                               const vector<string> &input_filenames,
+                               unordered_map<size_t, size_t> &kmer_counts,
+                               stats_collector &sc, size_t &read_length,
+                               vector<double> &frequency) {
 
    stats_background b;
    b.initialize();
@@ -210,26 +210,77 @@ extract_kmer_counts(const int k_value, const vector<string> &input_filenames,
    cout<<"bad_kmers:"<<sc.bad_kmers<<endl;
 }
 
+
+
+static void
+extract_kmer_counts_from_fasta(const int k_value,
+                               const vector<string> &input_filenames,
+                               unordered_map<size_t, size_t> &kmer_counts,
+                               stats_collector &sc,
+                               size_t &read_length,
+                               vector<double> &frequency) {
+
+   stats_background b;
+   b.initialize();
+   read_length = 0;
+
+   for (size_t i = 0; i < input_filenames.size(); i++) {
+      std::ifstream in(input_filenames[i].c_str());
+      if (!in)
+         throw SMITHLABException("could not open " + input_filenames[i]);
+
+      string line;
+      size_t line_count = 0;
+        //should take care of unwanted space lines in the future.
+      while (getline(in, line)) {
+          if(line.size()) {
+                  if (line_count) {
+                          extract_kmer_counts_sequence(k_value, line, kmer_counts, sc);
+                          update_background(line, b);
+                          read_length += (line.length()-k_value+1);
+                  }
+                  ++line_count;
+          }
+      }
+   }
+
+   //used for debug
+   cout<<"read_length:"<<read_length<<endl;
+   static const size_t d = pow(smithlab::alphabet_size, k_value);
+   const double n_reads = read_length;
+
+   for (size_t i = 0; i < smithlab::alphabet_size; ++i) {
+      b.background[i] /= b.n_characters;
+      frequency.push_back(b.background[i]);
+   }
+   //unordered_map<string, size_t>::const_iterator i = kmer_counts.begin();
+
+   cout<<"bad_kmers:"<<sc.bad_kmers<<endl;
+}
+
+
+
 int
 main(int argc, const char **argv) {
 
    try {
 
-      bool VERBOSE = false;
+      bool VERBOSE = false, isFASTA = false;
       int k_value = 0;
       string id;
 
-      /****************** COMMAND LINE OPTIONS ********************/
+      /*********************** COMMAND LINE OPTIONS **************************/
       OptionParser opt_parse(strip_path(argv[0]),
-            "makes k-mer counts file from FASTQ file(s)",
+            "makes k-mer counts file from FASTQ/FASTA file(s)",
             "<outfile> <infile1> [<infile2> ...]");
       opt_parse.add_opt("id", 'i', "metagenome id", true, id);
       opt_parse.add_opt("kmer", 'k', "word size", true, k_value);
+      opt_parse.add_opt("fasta_flag", 'f', "fasta or fastq", false, isFASTA);
       opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
 
       vector<string> leftover_args;
       opt_parse.parse(argc, argv, leftover_args);
-      if (argc == 1 || opt_parse.help_requested()) {
+      if (argc < 2 || opt_parse.help_requested()) {
          cerr << opt_parse.help_message() << endl
             << opt_parse.about_message() << endl;
          return EXIT_SUCCESS;
@@ -250,7 +301,7 @@ main(int argc, const char **argv) {
       vector<string> input_filenames;
       copy(leftover_args.begin() + 1, leftover_args.end(),
             back_inserter(input_filenames));
-      /****************** END COMMAND LINE OPTIONS *****************/
+      /*********************** END COMMAND LINE OPTIONS **********************/
 
       if (VERBOSE) {
          std::clog << "input files:" << endl;
@@ -259,27 +310,33 @@ main(int argc, const char **argv) {
       }
 
       unordered_map<size_t, size_t> kmer_counts;
-
       stats_collector sc;
 
       size_t total_length=0;
       std::vector<double> background;
-      extract_kmer_counts(k_value, input_filenames,
-            kmer_counts,sc,total_length,background);
+      if (isFASTA)
+        extract_kmer_counts_from_fasta(k_value, input_filenames,
+                                        kmer_counts, sc, total_length,
+                                        background);
+      else
+        extract_kmer_counts_from_fastq(k_value, input_filenames,
+                                        kmer_counts, sc, total_length,
+                                        background);
 
+      /************** WRITING THE k-CV WITHOUT CENTRALIZATION ****************/
       std::ofstream of;
       if (!outfile.empty()) of.open(outfile.c_str());
       std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-      out<<id<<'\n';
-      out<<total_length<<'\n';
-      out<<"A:"<<background[0]<<'\n';
-      out<<"C:"<<background[1]<<'\n';
-      out<<"G:"<<background[2]<<'\n';
-      out<<"T:"<<background[3]<<'\n';
+      out << id << endl;
+      out << total_length << endl;
+      out << "A " << background[0] << endl;
+      out << "C " << background[1] << endl;
+      out << "G " << background[2] << endl;
+      out << "T " << background[3] << endl;
+
       unordered_map<size_t, size_t>::const_iterator it = kmer_counts.begin();
-      while(it != kmer_counts.end()) {
-          out<<it->first<<": "<<it->second<<'\n';
-          ++it;
+      for (; it != kmer_counts.begin(); ++it) {
+          out << it->first << " " << it->second << endl;
       }
 
       if (VERBOSE)
