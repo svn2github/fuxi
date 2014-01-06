@@ -165,6 +165,12 @@ calc_prob_word(string &word, const stats_background &b) {
    return ret;
 }
 
+
+static bool
+is_fastq_sequence_line(const size_t line_number) {
+  return (line_number % 4 == 1);
+}
+
 static void
 extract_kmer_counts_from_fastq(const int k_value,
                                const vector<string> &input_filenames,
@@ -183,23 +189,20 @@ extract_kmer_counts_from_fastq(const int k_value,
 
       string line;
       size_t line_count = 0;
-        //should take care of unwanted space lines in the future.
       while (getline(in, line)) {
-          if(line.size()) {
-                  if (line_count) {
-                          extract_kmer_counts_sequence(k_value, line, kmer_counts, sc);
-                          update_background(line, b);
-                          read_length += (line.length()-k_value+1);
-                  }
-                  ++line_count;
-          }
+         if (is_fastq_sequence_line(line_count)) {
+             extract_kmer_counts_sequence(k_value, line, kmer_counts, sc);
+             update_background(line, b);
+             read_length += (line.length()-k_value+1);
+         }
+         ++line_count;
       }
    }
 
    //used for debug
    cout<<"read_length:"<<read_length<<endl;
-   static const size_t d = pow(smithlab::alphabet_size, k_value);
-   const double n_reads = read_length;
+   //static const size_t d = pow(smithlab::alphabet_size, k_value);
+   //const double n_reads = read_length;
 
    for (size_t i = 0; i < smithlab::alphabet_size; ++i) {
       b.background[i] /= b.n_characters;
@@ -229,19 +232,16 @@ extract_kmer_counts_from_fasta(const int k_value,
       if (!in)
          throw SMITHLABException("could not open " + input_filenames[i]);
 
-      string line;
-      size_t line_count = 0;
-        //should take care of unwanted space lines in the future.
-      while (getline(in, line)) {
-          if(line.size()) {
-                  if (line_count) {
-                          extract_kmer_counts_sequence(k_value, line, kmer_counts, sc);
-                          update_background(line, b);
-                          read_length += (line.length()-k_value+1);
-                  }
-                  ++line_count;
-          }
-      }
+       string description;
+	   getline(in,description);
+	   string line;
+	   string seq;
+	   while (getline(in, line)) {
+	     seq+=line;
+	   }
+	   extract_kmer_counts_sequence(k_value,seq, kmer_counts, sc);
+	   update_background(seq, b);
+	   read_length += (seq.length()-k_value+1);
    }
 
    //used for debug
@@ -328,15 +328,17 @@ main(int argc, const char **argv) {
       if (!outfile.empty()) of.open(outfile.c_str());
       std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
       out << id << endl;
-      out << total_length << endl;
+      out << total_length-sc.bad_kmers << endl;
       out << "A " << background[0] << endl;
       out << "C " << background[1] << endl;
       out << "G " << background[2] << endl;
       out << "T " << background[3] << endl;
 
-      unordered_map<size_t, size_t>::const_iterator it = kmer_counts.begin();
-      for (; it != kmer_counts.begin(); ++it) {
-          out << it->first << " " << it->second << endl;
+      map<size_t,size_t> ordered_kmers(kmer_counts.begin(),kmer_counts.end());
+      map<size_t,size_t>::const_iterator it = ordered_kmers.begin();
+      while(it != ordered_kmers.end()) {
+         out<<it->first<<" "<<it->second<<'\n';
+         ++it;
       }
 
       if (VERBOSE)
