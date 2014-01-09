@@ -24,6 +24,7 @@
 #include <iostream>
 #include <tr1/unordered_map>
 #include <cmath>
+#include <map>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -36,7 +37,7 @@ using std::cerr;
 using std::cout;
 using std::endl;
 using std::tr1::unordered_map;
-
+using std::map;
 
 
 struct stats_background {
