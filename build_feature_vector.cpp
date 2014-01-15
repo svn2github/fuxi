@@ -97,36 +97,36 @@ computeInnerProduct(const vector<profile> &referenceVectors,
 
 static void
 computeD2shape(const vector<profile> &referenceVectors, 
-	const vector<double> &requestProfile,
+	const profile &requestProfile,
 	vector<double> &outFeature,
 	const size_t k_value) {
 
-    static const size_t dim = pow(smithlab::alphabet_size,k_value);
+    //static const size_t dim = pow(smithlab::alphabet_size,k_value);
     //Processing request kmer vector by reducing mean value
-    for(size_t i=0; i<dim; ++i) {
-	double prob=probWordFromIndex(i, requestProfile.background);
-	unordered_map<size_t,size_t>::iterator it = requestProfile.kmer_counts.find(i);
-	if(it == requestProfile.kmer_counts.end())
-	    requestProfile.kmer_counts[i] = 0;
-	requestProfile.kmer_counts[i] -= (requestProfile.total_kmers*prob);
-    }
+    //for(size_t i=0; i<dim; ++i) {
+    //    double prob=probWordFromIndex(i, requestProfile.background);
+    //    unordered_map<size_t,size_t>::iterator it = (requestProfile.kmer_counts).find(i);
+    //    if(it == requestProfile.kmer_counts.end())
+    //        requestProfile.kmer_counts[i] = 0;
+    //    requestProfile.kmer_counts[i] -= (requestProfile.total_kmers*prob);
+    //}
 
-    for(vector<profile>::const_iterator it = referenceVectors.begin();
-	    it != referenceVectors.end(); ++it) {
-	//Processing reference bacteria kmer vector by reducing mean value
-	for(size_t i=0; i<dim; ++i) {
-	    double prob=probWordFromIndex(i, it->background);
-	    unordered_map<size_t,size_t>::iterator it_n = it->kmer_counts.find(i);
-	    if(it_n == it->kmer_counts.end())
-		it->kmer_counts[i] = 0;
-	    it->kmer_counts[i] -= (it->total_kmers*prob);
-	}
-    }
+    //for(vector<profile>::const_iterator it = referenceVectors.begin();
+    //        it != referenceVectors.end(); ++it) {
+    //    //Processing reference bacteria kmer vector by reducing mean value
+    //    for(size_t i=0; i<dim; ++i) {
+    //        double prob=probWordFromIndex(i, it->background);
+    //        unordered_map<size_t,size_t>::iterator it_n = it->kmer_counts.find(i);
+    //        if(it_n == it->kmer_counts.end())
+    //    	it->kmer_counts[i] = 0;
+    //        it->kmer_counts[i] -= (it->total_kmers*prob);
+    //    }
+    //}
 }
 
 static void
 computeJaccardIndex(const vector<profile> &referenceVectors, 
-	const vector<double> &requestVector,
+	const profile &requestVector,
 	vector<double> &outFeature) {
 }
 
@@ -152,15 +152,12 @@ constructReferenceVector(const string &filename,
 	in>>counts;
 	requestProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
     }
-    switch(distance){
-	case "dotProduct": computeInnerProduct(referenceVectors,requestProfile,outFeature);
-			   break;
-	case "d2shape": computeD2shape(referenceVectors,requestProfile,outFeature,k_value);
-			break;
-	case "jaccard": computeJaccardIndex(referenceVectors,requestProfile,outFeature);
-			break;
-	default:break;
-    }
+    if(distance == "dotProduct")
+	computeInnerProduct(referenceVectors,requestProfile,outFeature);
+    else if(distance == "d2shape")
+	computeD2shape(referenceVectors,requestProfile,outFeature,k_value);
+    else if(distance == "jaccard") 
+	computeJaccardIndex(referenceVectors,requestProfile,outFeature);
 }
 
 int
@@ -252,7 +249,7 @@ main(int argc, const char **argv) {
 		vector<double> outFeature;
 		string requestID;
 		constructReferenceVector(input_filenames[i],referenceVectors,
-			outFeature,requestID);
+			outFeature,requestID,k_value,distance);
 		std::ofstream of;
 		if (!outfile.empty()) of.open(outfile.c_str(),
 			std::ofstream::out | std::ofstream::app);
