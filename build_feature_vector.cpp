@@ -91,7 +91,7 @@ probWordFromIndex(size_t index, const vector<double> &background) {
 
 static void
 computeInnerProduct(const vector<profile> &referenceVectors, 
-	const profile &requestVector,
+	const profile &requestProfile,
 	vector<double> &outFeature) {
 }
 
@@ -124,16 +124,36 @@ computeD2shape(const vector<profile> &referenceVectors,
     //}
 }
 
-static void
-computeJaccardIndex(const vector<profile> &referenceVectors, 
-	const profile &requestVector,
-	vector<double> &outFeature) {
+/**
+ * Taking two profile, calculate their Jaccard similarity
+ */
+static double
+computeJaccardIndex(const profile &referenceProfile,
+	const profile &requestProfile) {
+
+    size_t intersection = 0;
+    size_t union = 0;
+    unordered_map<size_t,size_t> temp = requestProfile.kmer_counts;
+    for(unordered_map<size_t, size_t>::const_iterator it(referenceProfile.kmer_counts.begin());
+	    it != referenceProfile.kmer_counts.end(); ++it) {
+	if(temp.find(it->first) != temp.end()) {
+	    intersection += std::min(it->second,temp[it->first]);
+	    temp[it->first] = std::max(it->second, temp[it->first]);
+	}
+	else
+	    temp[it->first] = it->second;
+    }
+    for(unordered_map<size_t,size_t>::const_iterator it(temp.begin());
+	    it != temp.end(); ++it) {
+	union += it->second;
+    }
+    return 1.0*intersection/union;
 }
 
 static void
 constructReferenceVector(const string &filename,
 	const vector<profile> &referenceVectors,
-	vector<double> &outFeature,
+	unordered_map<string,double> &outFeature,
 	string &id, const size_t k_value,const string &distance) {
     ifstream in(filename.c_str());
     if(!in)
@@ -153,11 +173,15 @@ constructReferenceVector(const string &filename,
 	requestProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
     }
     if(distance == "dotProduct")
-	computeInnerProduct(referenceVectors,requestProfile,outFeature);
+	//computeInnerProduct(referenceVectors,requestProfile,outFeature);
     else if(distance == "d2shape")
-	computeD2shape(referenceVectors,requestProfile,outFeature,k_value);
-    else if(distance == "jaccard") 
-	computeJaccardIndex(referenceVectors,requestProfile,outFeature);
+	//computeD2shape(referenceVectors,requestProfile,outFeature,k_value);
+    else if(distance == "jaccard"){ 
+	for(size_t i = 0; i < referenceVectors.size(); ++i){
+	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
+	    outFeature[referenceVectors[i].id] = val;
+	}
+    }
 }
 
 int
@@ -219,48 +243,46 @@ main(int argc, const char **argv) {
 
 	// If k_value is small, we can load all of the reference bacteria kmer vectors, the
 	// memory needed here is about 1 gigabytes for k=6
-	if(k_value <= 6) {
-	    for(size_t i=0; i < filenames.size(); ++i) {
-		profile eachProfile;
-		eachProfile.initialize();
+	for(size_t i=0; i < filenames.size(); ++i) {
+	    profile eachProfile;
+	    eachProfile.initialize();
 
-		ifstream in(filenames[i].c_str());
-		if(!in)
-		    throw SMITHLABException("could not open file" + filenames[i]);
-		getline(in,eachProfile.id);
-		in>>eachProfile.total_kmers;
-		for(size_t j=0; j<smithlab::alphabet_size; ++j) {
-		    char atcg; // deal with ACGT
-		    in>>atcg;
-		    in>>eachProfile.background[j];
-		}
-		size_t index, counts;
-		while(in>>index) {
-		    in>>counts;
-		    eachProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
-		}
-
-		//eachProfile.print();
-		referenceVectors.push_back(eachProfile);
+	    ifstream in(filenames[i].c_str());
+	    if(!in)
+		throw SMITHLABException("could not open file" + filenames[i]);
+	    getline(in,eachProfile.id);
+	    in>>eachProfile.total_kmers;
+	    for(size_t j=0; j<smithlab::alphabet_size; ++j) {
+		char atcg; // deal with ACGT
+		in>>atcg;
+		in>>eachProfile.background[j];
+	    }
+	    size_t index, counts;
+	    while(in>>index) {
+		in>>counts;
+		eachProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
 	    }
 
+	    //eachProfile.print();
+	    referenceVectors.push_back(eachProfile);
+	}
 
-	    for (size_t i = 0; i < input_filenames.size(); ++i) {
-		vector<double> outFeature;
-		string requestID;
-		constructReferenceVector(input_filenames[i],referenceVectors,
-			outFeature,requestID,k_value,distance);
-		std::ofstream of;
-		if (!outfile.empty()) of.open(outfile.c_str(),
-			std::ofstream::out | std::ofstream::app);
-		std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-		out << k_value << '\n';
-		out << requestID << '\n';
-		for (vector<double>::iterator it(outFeature.begin());
-			it != outFeature.end(); ++it)
-		    out << *it << '\n';
-	    }
+	for (size_t i = 0; i < input_filenames.size(); ++i) {
+	    unordered_map<string,double> outFeature;
+	    string requestID;
+	    constructReferenceVector(input_filenames[i],referenceVectors,
+		    outFeature,requestID,k_value,distance);
+	    std::ofstream of;
+	    if (!outfile.empty()) of.open(outfile.c_str(),
+		    std::ofstream::out | std::ofstream::app);
+	    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+
+	    out << k_value << '\n';
+	    out << requestID << '\n';
+	    for (vector<double>::iterator it(outFeature.begin());
+		    it != outFeature.end(); ++it)
+		out << *it << '\n';
 	}
     }
     catch (const SMITHLABException &e) {
