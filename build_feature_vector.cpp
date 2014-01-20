@@ -100,28 +100,6 @@ computeD2shape(const vector<profile> &referenceVectors,
 	const profile &requestProfile,
 	vector<double> &outFeature,
 	const size_t k_value) {
-
-    //static const size_t dim = pow(smithlab::alphabet_size,k_value);
-    //Processing request kmer vector by reducing mean value
-    //for(size_t i=0; i<dim; ++i) {
-    //    double prob=probWordFromIndex(i, requestProfile.background);
-    //    unordered_map<size_t,size_t>::iterator it = (requestProfile.kmer_counts).find(i);
-    //    if(it == requestProfile.kmer_counts.end())
-    //        requestProfile.kmer_counts[i] = 0;
-    //    requestProfile.kmer_counts[i] -= (requestProfile.total_kmers*prob);
-    //}
-
-    //for(vector<profile>::const_iterator it = referenceVectors.begin();
-    //        it != referenceVectors.end(); ++it) {
-    //    //Processing reference bacteria kmer vector by reducing mean value
-    //    for(size_t i=0; i<dim; ++i) {
-    //        double prob=probWordFromIndex(i, it->background);
-    //        unordered_map<size_t,size_t>::iterator it_n = it->kmer_counts.find(i);
-    //        if(it_n == it->kmer_counts.end())
-    //    	it->kmer_counts[i] = 0;
-    //        it->kmer_counts[i] -= (it->total_kmers*prob);
-    //    }
-    //}
 }
 
 /**
@@ -132,7 +110,7 @@ computeJaccardIndex(const profile &referenceProfile,
 	const profile &requestProfile) {
 
     size_t intersection = 0;
-    size_t union = 0;
+    size_t sizeOfUnion = 0;
     unordered_map<size_t,size_t> temp = requestProfile.kmer_counts;
     for(unordered_map<size_t, size_t>::const_iterator it(referenceProfile.kmer_counts.begin());
 	    it != referenceProfile.kmer_counts.end(); ++it) {
@@ -145,9 +123,9 @@ computeJaccardIndex(const profile &referenceProfile,
     }
     for(unordered_map<size_t,size_t>::const_iterator it(temp.begin());
 	    it != temp.end(); ++it) {
-	union += it->second;
+	sizeOfUnion += it->second;
     }
-    return 1.0*intersection/union;
+    return 1.0*intersection/sizeOfUnion;
 }
 
 static void
@@ -161,6 +139,7 @@ constructReferenceVector(const string &filename,
     profile requestProfile;
     requestProfile.initialize();
     getline(in,requestProfile.id);
+    id =  requestProfile.id;
     in>>requestProfile.total_kmers;
     for(size_t j=0; j<smithlab::alphabet_size; ++j) {
 	char atcg; // deal with ACGT
@@ -172,10 +151,18 @@ constructReferenceVector(const string &filename,
 	in>>counts;
 	requestProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
     }
-    if(distance == "dotProduct")
-	//computeInnerProduct(referenceVectors,requestProfile,outFeature);
-    else if(distance == "d2shape")
-	//computeD2shape(referenceVectors,requestProfile,outFeature,k_value);
+    if(distance == "dotProduct"){ 
+	for(size_t i = 0; i < referenceVectors.size(); ++i){
+	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
+	    outFeature[referenceVectors[i].id] = val;
+	}
+    }
+    else if(distance == "d2shape"){ 
+	for(size_t i = 0; i < referenceVectors.size(); ++i){
+	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
+	    outFeature[referenceVectors[i].id] = val;
+	}
+    }
     else if(distance == "jaccard"){ 
 	for(size_t i = 0; i < referenceVectors.size(); ++i){
 	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
@@ -199,7 +186,7 @@ main(int argc, const char **argv) {
 		"with reference genome from kmer vector file(s)",
 		"<outfile> <dir> <infile1> [<infile2> ...]");
 	opt_parse.add_opt("kmer",'k',"word size",true,k_value);
-	opt_parse.add_opt("distance",'d',"distance measure",true,distance);
+	opt_parse.add_opt("distance",'d',"distance measure e.g. dotProduct, d2shape, jaccard",false,distance);
 
 	vector<string> leftover_args;
 	opt_parse.parse(argc, argv, leftover_args);
@@ -230,19 +217,12 @@ main(int argc, const char **argv) {
 	/////////////////////////////////////////////////////////////////
 	// READING IN THE DATABASE OF BACTERIAL GENOME FEATURES AND THEY ARE
 	// USED TO CONSTRUCT NEW FEATURES FOR OTHER METAGENOME
+	
 	vector<profile> referenceVectors;
 	vector<string> filenames;
 	/* Read Bacteria Kmer Feature Vectors As Reference Files*/
 	read_dir(dir,filename_suffix,filenames);
-
-	/* Sort the reference genomes alphabetically, so that the reference can
-	 * keep consistent under different systems
-	 */
-	sort(filenames.begin(),filenames.end());
-
-
-	// If k_value is small, we can load all of the reference bacteria kmer vectors, the
-	// memory needed here is about 1 gigabytes for k=6
+	
 	for(size_t i=0; i < filenames.size(); ++i) {
 	    profile eachProfile;
 	    eachProfile.initialize();
@@ -266,6 +246,7 @@ main(int argc, const char **argv) {
 	    //eachProfile.print();
 	    referenceVectors.push_back(eachProfile);
 	}
+	cout<<"The size of reference database is: " << referenceVectors.size()<<endl;
 
 
 	for (size_t i = 0; i < input_filenames.size(); ++i) {
@@ -280,9 +261,9 @@ main(int argc, const char **argv) {
 
 	    out << k_value << '\n';
 	    out << requestID << '\n';
-	    for (vector<double>::iterator it(outFeature.begin());
+	    for (unordered_map<string,double>::const_iterator it(outFeature.begin());
 		    it != outFeature.end(); ++it)
-		out << *it << '\n';
+		out << it->first<<" "<< it->second<< '\n';
 	}
     }
     catch (const SMITHLABException &e) {
