@@ -77,41 +77,64 @@ profile::print() {
     }
 }
 
-//Calculate the probability of a word from it's decimal index
-static double 
-probWordFromIndex(size_t index, const vector<double> &background) {
-    double prob=1;
-    size_t base=smithlab::alphabet_size;
-    while(index != 0) {
-	prob *= background[index%base];
-	index /= base;
+static profile 
+constructProfile (const string &filename) {
+    ifstream in(filename.c_str());
+    if(!in)
+	throw SMITHLABException("Could not open "+ filename);
+    profile newProfile;
+    newProfile.initialize();
+    getline(in,newProfile.id);
+    in>>newProfile.total_kmers;
+    for(size_t j=0; j<smithlab::alphabet_size; ++j) {
+	char atcg; // deal with ACGT
+	in>>atcg;
+	in>>newProfile.background[j];
     }
-    return prob;
+    size_t index, counts;
+    while(in>>index) {
+	in>>counts;
+	newProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
+    }
+    in.close();
+    return newProfile;
 }
 
-static void
-computeInnerProduct(const vector<profile> &referenceVectors, 
-	const profile &requestProfile,
-	vector<double> &outFeature) {
-}
-
-static void
-computeD2shape(const vector<profile> &referenceVectors, 
-	const profile &requestProfile,
-	vector<double> &outFeature,
-	const size_t k_value) {
-}
+//Calculate the probability of a word from it's decimal index
+// static double 
+// probWordFromIndex(size_t index, const vector<double> &background) {
+//     double prob=1;
+//     size_t base=smithlab::alphabet_size;
+//     while(index != 0) {
+// 	prob *= background[index%base];
+// 	index /= base;
+//     }
+//     return prob;
+// }
+//
+// static void
+// computeInnerProduct(const vector<profile> &referenceVectors, 
+// 	const profile &queryProfile,
+// 	vector<double> &outFeature) {
+// }
+//
+// static void
+// computeD2shape(const vector<profile> &referenceVectors, 
+// 	const profile &queryProfile,
+// 	vector<double> &outFeature,
+// 	const size_t k_value) {
+// }
 
 /**
  * Taking two profile, calculate their Jaccard similarity
  */
 static double
 computeJaccardIndex(const profile &referenceProfile,
-	const profile &requestProfile) {
+	const profile &queryProfile) {
 
     size_t intersection = 0;
     size_t sizeOfUnion = 0;
-    unordered_map<size_t,size_t> temp = requestProfile.kmer_counts;
+    unordered_map<size_t,size_t> temp = queryProfile.kmer_counts;
     for(unordered_map<size_t, size_t>::const_iterator it(referenceProfile.kmer_counts.begin());
 	    it != referenceProfile.kmer_counts.end(); ++it) {
 	if(temp.find(it->first) != temp.end()) {
@@ -126,49 +149,6 @@ computeJaccardIndex(const profile &referenceProfile,
 	sizeOfUnion += it->second;
     }
     return 1.0*intersection/sizeOfUnion;
-}
-
-static void
-constructReferenceVector(const string &filename,
-	const vector<profile> &referenceVectors,
-	unordered_map<string,double> &outFeature,
-	string &id, const size_t k_value,const string &distance) {
-    ifstream in(filename.c_str());
-    if(!in)
-	throw SMITHLABException("Could not open "+ filename);
-    profile requestProfile;
-    requestProfile.initialize();
-    getline(in,requestProfile.id);
-    id =  requestProfile.id;
-    in>>requestProfile.total_kmers;
-    for(size_t j=0; j<smithlab::alphabet_size; ++j) {
-	char atcg; // deal with ACGT
-	in>>atcg;
-	in>>requestProfile.background[j];
-    }
-    size_t index, counts;
-    while(in>>index) {
-	in>>counts;
-	requestProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
-    }
-    if(distance == "dotProduct"){ 
-	for(size_t i = 0; i < referenceVectors.size(); ++i){
-	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
-	    outFeature[referenceVectors[i].id] = val;
-	}
-    }
-    else if(distance == "d2shape"){ 
-	for(size_t i = 0; i < referenceVectors.size(); ++i){
-	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
-	    outFeature[referenceVectors[i].id] = val;
-	}
-    }
-    else if(distance == "jaccard"){ 
-	for(size_t i = 0; i < referenceVectors.size(); ++i){
-	    double val = computeJaccardIndex(referenceVectors[i],requestProfile);
-	    outFeature[referenceVectors[i].id] = val;
-	}
-    }
 }
 
 int
@@ -218,53 +198,44 @@ main(int argc, const char **argv) {
 	// READING IN THE DATABASE OF BACTERIAL GENOME FEATURES AND THEY ARE
 	// USED TO CONSTRUCT NEW FEATURES FOR OTHER METAGENOME
 	
-	vector<profile> referenceVectors;
 	vector<string> filenames;
 	/* Read Bacteria Kmer Feature Vectors As Reference Files*/
 	read_dir(dir,filename_suffix,filenames);
-	
-	for(size_t i=0; i < filenames.size(); ++i) {
-	    profile eachProfile;
-	    eachProfile.initialize();
-
-	    ifstream in(filenames[i].c_str());
-	    if(!in)
-		throw SMITHLABException("could not open file" + filenames[i]);
-	    getline(in,eachProfile.id);
-	    in>>eachProfile.total_kmers;
-	    for(size_t j=0; j<smithlab::alphabet_size; ++j) {
-		char atcg; // deal with ACGT
-		in>>atcg;
-		in>>eachProfile.background[j];
-	    }
-	    size_t index, counts;
-	    while(in>>index) {
-		in>>counts;
-		eachProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
-	    }
-
-	    //eachProfile.print();
-	    referenceVectors.push_back(eachProfile);
-	}
-	cout<<"The size of reference database is: " << referenceVectors.size()<<endl;
-
 
 	for (size_t i = 0; i < input_filenames.size(); ++i) {
 	    unordered_map<string,double> outFeature;
-	    string requestID;
-	    constructReferenceVector(input_filenames[i],referenceVectors,
-		    outFeature,requestID,k_value,distance);
+	    string queryID;
+	    profile queryProfile = constructProfile(input_filenames[i]);
+	    queryID = queryProfile.id;
+
+	    for(size_t i=0; i < filenames.size(); ++i) {
+		profile refProfile = constructProfile(filenames[i]);
+		double val = 0.0;
+		if(distance == "dotProduct"){ 
+		    val = computeJaccardIndex(refProfile,queryProfile);
+		}
+		else if(distance == "d2shape"){ 
+		    val = computeJaccardIndex(refProfile,queryProfile);
+		}
+		else if(distance == "jaccard"){ 
+		    val = computeJaccardIndex(refProfile,queryProfile);
+		}
+
+		outFeature[refProfile.id] = val;
+	    }
+
 	    std::ofstream of;
 	    if (!outfile.empty()) of.open(outfile.c_str(),
 		    std::ofstream::out | std::ofstream::app);
 	    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-
 	    out << k_value << '\n';
-	    out << requestID << '\n';
+	    out << queryID << '\n';
 	    for (unordered_map<string,double>::const_iterator it(outFeature.begin());
 		    it != outFeature.end(); ++it)
 		out << it->first<<" "<< it->second<< '\n';
 	}
+
+	cout<<"The size of reference database is: " << filenames.size()<<endl;
     }
     catch (const SMITHLABException &e) {
 	cerr << e.what() << endl;

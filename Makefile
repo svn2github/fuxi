@@ -6,7 +6,8 @@ ifndef SMITHLAB_CPP
 $(error Must define SMITHLAB_CPP variable)
 endif
 
-PROGS = extract_kmer_counts
+#PROGS = extract_kmer_counts build_feature_vector 
+PROGS = build_feature_vector 
 
 SOURCES = $(wildcard *.cpp)
 
@@ -34,6 +35,7 @@ endif
 
 all: $(PROGS)
 
+extract_kmer_counts : Metagenome.o
 extract_kmer_counts : Metagenome.o
 
 
