@@ -130,24 +130,18 @@ constructProfile (const string &filename) {
  */
 static double
 computeJaccardIndex(const profile &referenceProfile,
-	const profile &queryProfile) {
+	const	profile &queryProfile) {
 
     size_t intersection = 0;
     size_t sizeOfUnion = 0;
-    unordered_map<size_t,size_t> temp = queryProfile.kmer_counts;
     for(unordered_map<size_t, size_t>::const_iterator it(referenceProfile.kmer_counts.begin());
 	    it != referenceProfile.kmer_counts.end(); ++it) {
-	if(temp.find(it->first) != temp.end()) {
-	    intersection += std::min(it->second,temp[it->first]);
-	    temp[it->first] = std::max(it->second, temp[it->first]);
+	if(queryProfile.kmer_counts.find(it->first) != queryProfile.kmer_counts.end()) {
+	    // intersection += std::min(it->second,queryProfile.kmer_counts.at(it->second));
+	   intersection++;
 	}
-	else
-	    temp[it->first] = it->second;
     }
-    for(unordered_map<size_t,size_t>::const_iterator it(temp.begin());
-	    it != temp.end(); ++it) {
-	sizeOfUnion += it->second;
-    }
+    sizeOfUnion = referenceProfile.kmer_counts.size() + queryProfile.kmer_counts.size() - intersection;
     return 1.0*intersection/sizeOfUnion;
 }
 
@@ -201,15 +195,20 @@ main(int argc, const char **argv) {
 	vector<string> filenames;
 	/* Read Bacteria Kmer Feature Vectors As Reference Files*/
 	read_dir(dir,filename_suffix,filenames);
+	cout<<"Number of input files: " << input_filenames.size()<<endl;
 
 	for (size_t i = 0; i < input_filenames.size(); ++i) {
 	    unordered_map<string,double> outFeature;
 	    string queryID;
 	    profile queryProfile = constructProfile(input_filenames[i]);
 	    queryID = queryProfile.id;
+	    cout<<queryProfile.id <<" profile created. "<<"size: "<<queryProfile.kmer_counts.size()<<endl;
 
+	    size_t count = 0;
 	    for(size_t i=0; i < filenames.size(); ++i) {
 		profile refProfile = constructProfile(filenames[i]);
+		count++;
+		cout<<count<<": "<<refProfile.id <<" is loading! "<<endl;
 		double val = 0.0;
 		if(distance == "dotProduct"){ 
 		    val = computeJaccardIndex(refProfile,queryProfile);
@@ -222,6 +221,7 @@ main(int argc, const char **argv) {
 		}
 
 		outFeature[refProfile.id] = val;
+		cout<< refProfile.id <<"  " << val<<endl;
 	    }
 
 	    std::ofstream of;
