@@ -6,8 +6,8 @@ ifndef SMITHLAB_CPP
 $(error Must define SMITHLAB_CPP variable)
 endif
 
-#PROGS = extract_kmer_counts build_feature_vector 
-PROGS = build_feature_vector 
+PROGS = extract_kmer_counts build_feature_vector 
+#PROGS = build_feature_vector 
 
 SOURCES = $(wildcard *.cpp)
 

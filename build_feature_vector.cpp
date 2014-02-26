@@ -46,58 +46,58 @@ using std::make_pair;
 using std::tr1::unordered_map;
 
 struct profile {
-    string id; //The ID of the genome
-    size_t total_kmers; // The number of total kmers;
-    vector <double> background; // The frequency of A,C,G,T respectively
-    unordered_map<size_t, size_t>  kmer_counts; // The pairs of kmers
-    void initialize();
-    void print();
+   string id; //The ID of the genome
+   size_t total_kmers; // The number of total kmers;
+   vector <double> background; // The frequency of A,C,G,T respectively
+   unordered_map<size_t, size_t>  kmer_counts; // The pairs of kmers
+   void initialize();
+   void print();
 };
 
 void
 profile::initialize() {
-    total_kmers = 0;
-    for (size_t i=0; i<smithlab::alphabet_size; ++i) 
-	background.push_back(0.0);
+   total_kmers = 0;
+   for (size_t i=0; i<smithlab::alphabet_size; ++i) 
+      background.push_back(0.0);
 }
 
 void
 profile::print() {
-    cout<<"The profile for **"<< id <<"**:\n";
-    cout<<"total_kmers:"<<total_kmers<<"\n";
-    cout<<"A:"<<background[0]<<"\n";
-    cout<<"C:"<<background[1]<<"\n";
-    cout<<"G:"<<background[2]<<"\n";
-    cout<<"T:"<<background[3]<<"\n";
-    cout<<"Kmer_counts:\n";
-    unordered_map<size_t,size_t>::iterator it = kmer_counts.begin();
-    while(it != kmer_counts.end()) {
-	cout<<it->first<<" "<<it->second<<'\n';
-	++it;
-    }
+   cout<<"The profile for **"<< id <<"**:\n";
+   cout<<"total_kmers:"<<total_kmers<<"\n";
+   cout<<"A:"<<background[0]<<"\n";
+   cout<<"C:"<<background[1]<<"\n";
+   cout<<"G:"<<background[2]<<"\n";
+   cout<<"T:"<<background[3]<<"\n";
+   cout<<"Kmer_counts:\n";
+   unordered_map<size_t,size_t>::iterator it = kmer_counts.begin();
+   while(it != kmer_counts.end()) {
+      cout<<it->first<<" "<<it->second<<'\n';
+      ++it;
+   }
 }
 
 static profile 
 constructProfile (const string &filename) {
-    ifstream in(filename.c_str());
-    if(!in)
-	throw SMITHLABException("Could not open "+ filename);
-    profile newProfile;
-    newProfile.initialize();
-    getline(in,newProfile.id);
-    in>>newProfile.total_kmers;
-    for(size_t j=0; j<smithlab::alphabet_size; ++j) {
-	char atcg; // deal with ACGT
-	in>>atcg;
-	in>>newProfile.background[j];
-    }
-    size_t index, counts;
-    while(in>>index) {
-	in>>counts;
-	newProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
-    }
-    in.close();
-    return newProfile;
+   ifstream in(filename.c_str());
+   if(!in)
+      throw SMITHLABException("Could not open "+ filename);
+   profile newProfile;
+   newProfile.initialize();
+   getline(in,newProfile.id);
+   in>>newProfile.total_kmers;
+   for(size_t j=0; j<smithlab::alphabet_size; ++j) {
+      char atcg; // deal with ACGT
+      in>>atcg;
+      in>>newProfile.background[j];
+   }
+   size_t index, counts;
+   while(in>>index) {
+      in>>counts;
+      newProfile.kmer_counts.insert(make_pair<size_t,size_t>(index,counts));
+   }
+   in.close();
+   return newProfile;
 }
 
 //Calculate the probability of a word from it's decimal index
@@ -130,120 +130,133 @@ constructProfile (const string &filename) {
  */
 static double
 computeJaccardIndex(const profile &referenceProfile,
-	const	profile &queryProfile) {
+      const	profile &queryProfile) {
 
-    size_t intersection = 0;
-    size_t sizeOfUnion = 0;
-    for(unordered_map<size_t, size_t>::const_iterator it(referenceProfile.kmer_counts.begin());
-	    it != referenceProfile.kmer_counts.end(); ++it) {
-	if(queryProfile.kmer_counts.find(it->first) != queryProfile.kmer_counts.end()) {
-	    // intersection += std::min(it->second,queryProfile.kmer_counts.at(it->second));
-	   intersection++;
-	}
-    }
-    sizeOfUnion = referenceProfile.kmer_counts.size() + queryProfile.kmer_counts.size() - intersection;
-    return 1.0*intersection/sizeOfUnion;
+   size_t intersection = 0;
+   size_t sizeOfUnion = 0;
+   for(unordered_map<size_t, size_t>::const_iterator it(referenceProfile.kmer_counts.begin());
+	 it != referenceProfile.kmer_counts.end(); ++it) {
+      unordered_map<size_t,size_t>::const_iterator query_it = 
+	 queryProfile.kmer_counts.find(it->first);
+      if(query_it != queryProfile.kmer_counts.end()) {
+	 intersection += std::min(it->second,query_it->second);
+      }
+   }
+   sizeOfUnion = referenceProfile.total_kmers + queryProfile.total_kmers - intersection;
+   return 1.0*intersection/sizeOfUnion;
 }
 
 int
 main(int argc, const char **argv) {
 
-    try {
+   try {
 
-	static const string filename_suffix = "cv";
-	size_t k_value = 0;
-	string distance = "dotProduct";
+      static const string filename_suffix = "cv";
+      size_t k_value = 0;
+      string distance = "dotProduct";
 
-	/****************** COMMAND LINE OPTIONS ********************/
-	OptionParser opt_parse(strip_path(argv[0]),
-		"makes feature vectors using inner product "
-		"with reference genome from kmer vector file(s)",
-		"<outfile> <dir> <infile1> [<infile2> ...]");
-	opt_parse.add_opt("kmer",'k',"word size",true,k_value);
-	opt_parse.add_opt("distance",'d',"distance measure e.g. dotProduct, d2shape, jaccard",false,distance);
+      /****************** COMMAND LINE OPTIONS ********************/
+      OptionParser opt_parse(strip_path(argv[0]),
+	    "makes feature vectors using inner product "
+	    "with reference genome from kmer vector file(s)",
+	    "<outfile> <dir> <infile1> [<infile2> ...]");
+      opt_parse.add_opt("kmer",'k',"word size",true,k_value);
+      opt_parse.add_opt("distance",'d',"distance measure e.g. dotProduct, d2shape, jaccard",false,distance);
 
-	vector<string> leftover_args;
-	opt_parse.parse(argc, argv, leftover_args);
-	if (argc == 1 || opt_parse.help_requested()) {
-	    cerr << opt_parse.help_message() << endl
-		<< opt_parse.about_message() << endl;
-	    return EXIT_SUCCESS;
-	}
-	if (opt_parse.about_requested()) {
-	    cerr << opt_parse.about_message() << endl;
-	    return EXIT_SUCCESS;
-	}
-	if (opt_parse.option_missing()) {
-	    cerr << opt_parse.option_missing_message() << endl;
-	    return EXIT_SUCCESS;
-	}
-	if (leftover_args.size() < 3) {
-	    cerr << opt_parse.help_message() << endl;
-	    return EXIT_SUCCESS;
-	}
-	const string outfile(leftover_args.front());
-	const string dir(leftover_args[1]);
-	vector<string> input_filenames;
-	copy(leftover_args.begin() + 2, leftover_args.end(),
-		back_inserter(input_filenames));
-	/****************** END COMMAND LINE OPTIONS *****************/
+      vector<string> leftover_args;
+      opt_parse.parse(argc, argv, leftover_args);
+      if (argc == 1 || opt_parse.help_requested()) {
+	 cerr << opt_parse.help_message() << endl
+	    << opt_parse.about_message() << endl;
+	 return EXIT_SUCCESS;
+      }
+      if (opt_parse.about_requested()) {
+	 cerr << opt_parse.about_message() << endl;
+	 return EXIT_SUCCESS;
+      }
+      if (opt_parse.option_missing()) {
+	 cerr << opt_parse.option_missing_message() << endl;
+	 return EXIT_SUCCESS;
+      }
+      if (leftover_args.size() < 3) {
+	 cerr << opt_parse.help_message() << endl;
+	 return EXIT_SUCCESS;
+      }
+      const string outfile(leftover_args.front());
+      const string dir(leftover_args[1]);
+      vector<string> input_filenames;
+      copy(leftover_args.begin() + 2, leftover_args.end(),
+	    back_inserter(input_filenames));
+      /****************** END COMMAND LINE OPTIONS *****************/
 
-	/////////////////////////////////////////////////////////////////
-	// READING IN THE DATABASE OF BACTERIAL GENOME FEATURES AND THEY ARE
-	// USED TO CONSTRUCT NEW FEATURES FOR OTHER METAGENOME
-	
-	vector<string> filenames;
-	/* Read Bacteria Kmer Feature Vectors As Reference Files*/
-	read_dir(dir,filename_suffix,filenames);
-	cout<<"Number of input files: " << input_filenames.size()<<endl;
+      /////////////////////////////////////////////////////////////////
+      // READING IN THE DATABASE OF BACTERIAL GENOME FEATURES AND THEY ARE
+      // USED TO CONSTRUCT NEW FEATURES FOR OTHER METAGENOME
 
-	for (size_t i = 0; i < input_filenames.size(); ++i) {
-	    unordered_map<string,double> outFeature;
-	    string queryID;
-	    profile queryProfile = constructProfile(input_filenames[i]);
-	    queryID = queryProfile.id;
-	    cout<<queryProfile.id <<" profile created. "<<"size: "<<queryProfile.kmer_counts.size()<<endl;
+      vector<string> filenames;
+      /* Read Bacteria Kmer Feature Vectors As Reference Files*/
+      read_dir(dir,filename_suffix,filenames);
+      cout<<"Number of input files: " << input_filenames.size()<<endl;
 
-	    size_t count = 0;
-	    for(size_t i=0; i < filenames.size(); ++i) {
-		profile refProfile = constructProfile(filenames[i]);
-		count++;
-		cout<<count<<": "<<refProfile.id <<" is loading! "<<endl;
-		double val = 0.0;
-		if(distance == "dotProduct"){ 
-		    val = computeJaccardIndex(refProfile,queryProfile);
-		}
-		else if(distance == "d2shape"){ 
-		    val = computeJaccardIndex(refProfile,queryProfile);
-		}
-		else if(distance == "jaccard"){ 
-		    val = computeJaccardIndex(refProfile,queryProfile);
-		}
+      for (size_t k = 0; k < input_filenames.size(); ++k) {
+	 unordered_map<string,double> outFeature;
+	 string queryID;
+	 profile queryProfile = constructProfile(input_filenames[k]);
+	 queryID = queryProfile.id;
+	 cout<<queryProfile.id <<" profile created. "<<"size: "<<
+	    queryProfile.kmer_counts.size()<<endl;
 
-		outFeature[refProfile.id] = val;
-		cout<< refProfile.id <<"  " << val<<endl;
+	 //   size_t count = 0;
+	 for(size_t i=0; i < filenames.size(); ++i) {
+	    string ref_id;
+	    size_t total_kmers;
+
+	    ifstream in(filenames[i].c_str());
+	    if(!in)
+	       throw SMITHLABException("Could not open "+ filenames[i]);
+	    getline(in,ref_id);
+	    in>>total_kmers;
+	    for(size_t j=0; j<smithlab::alphabet_size; ++j) {
+	       char atcg; // deal with ACGT
+	       double freq;
+	       in>>atcg;
+	       in>>freq;
 	    }
+	    size_t index, counts;
+	    size_t intersection = 0;
+	    size_t size_of_union = 0;
+	    while(in>>index) {
+	       in>>counts;
+	       unordered_map<size_t,size_t>::const_iterator query_it = 
+		  queryProfile.kmer_counts.find(index);
+	       if(query_it != queryProfile.kmer_counts.end()) 
+		  intersection += std::min(counts,query_it->second);
+	    }
+	    size_of_union = total_kmers + queryProfile.total_kmers - intersection;
+	    double val = 1.0*intersection/size_of_union;
+	    outFeature[ref_id] = val;
+	 }
 
-	    std::ofstream of;
-	    if (!outfile.empty()) of.open(outfile.c_str(),
-		    std::ofstream::out | std::ofstream::app);
-	    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-	    out << k_value << '\n';
-	    out << queryID << '\n';
-	    for (unordered_map<string,double>::const_iterator it(outFeature.begin());
-		    it != outFeature.end(); ++it)
-		out << it->first<<" "<< it->second<< '\n';
-	}
+	 std::ofstream of;
+	 if (!outfile.empty()) of.open(outfile.c_str(),
+	       std::ofstream::out | std::ofstream::app);
+	 std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+	 out << k_value << '\n';
+	 out << queryID << '\n';
+	 for (unordered_map<string,double>::const_iterator it(outFeature.begin());
+	       it != outFeature.end(); ++it)
+	    out << it->first<<" "<< it->second<< '\n';
+      }
 
-	cout<<"The size of reference database is: " << filenames.size()<<endl;
-    }
-    catch (const SMITHLABException &e) {
-	cerr << e.what() << endl;
-	return EXIT_FAILURE;
-    }
-    catch (std::bad_alloc &ba) {
-	cerr << "ERROR: could not allocate memory" << endl;
-	return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
+      cout<<"The size of reference database is: " << filenames.size()<<endl;
+   }
+   catch (const SMITHLABException &e) {
+      cerr << e.what() << endl;
+      return EXIT_FAILURE;
+   }
+   catch (std::bad_alloc &ba) {
+      cerr << "ERROR: could not allocate memory" << endl;
+      return EXIT_FAILURE;
+   }
+   return EXIT_SUCCESS;
 }

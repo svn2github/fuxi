@@ -248,13 +248,5 @@ Metagenome::compute_angle(const Metagenome &other) const {
   }
 
   angle /= (norm(normalized_word_counts) * norm(other.normalized_word_counts));
-
-  // Under poor normalization rule, angle could be more than one if the points
-  // are so close. This should be changed in the future.
-  //
-  if (abs(angle) > 1)
-    angle = 1;
-  //
-
   return acos(angle); // scale factor 180 / M_PI for "degree" conversion.
 }
